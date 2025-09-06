@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>💕 My Hypertrophy Tracker 💕</title>
+
+<!-- Chart.js CDN for progress graphs -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+  body {
+    font-family: 'Arial', sans-serif;
+    background: #ffe6f0;
+    color: #330033;
+    margin: 10px;
+  }
+  h1,h2,h3 { margin: 10px 0; }
+  .container { display: flex; flex-wrap: wrap; gap: 12px; }
+  .card {
+    background: #fff0f5;
+    padding: 16px;
+    border-radius: 16px;
+    box-shadow: 0 4px 10px rgba(255, 182, 193, 0.4);
+    flex: 1 1 300px;
+  }
+  input, select, button { 
+    padding: 8px; margin: 4px 0; border-radius: 12px; border: 1px solid #ffb3d9; font-size: 14px; 
+  }
+  button { cursor: pointer; background: #ff66b3; color: white; border: none; transition:0.2s; }
+  button:hover { background: #ff3399; }
+  button.secondary { background: #ffcccc; color: #330033; }
+  .exercise { padding: 6px; border: 1px dashed #ffb3d9; margin-bottom: 6px; border-radius: 8px; }
+  .tip { font-size: 13px; color: #660066; margin: 4px 0; display: none; }
+  .video { margin: 6px 0; display: none; }
+  .completed { text-decoration: line-through; color: #999; }
+</style>
+</head>
+<body>
+
+<h1>💕 My Hypertrophy Tracker 💕</h1>
+
+<div class="container">
+  <!-- Workout Split Selection -->
+  <div class="card">
+    <h2>Workout Split 🏋️‍♀️</h2>
+    <label>Select Split:</label>
+    <select id="split">
+      <option value="fullbody">Full Body</option>
+      <option value="pushpulllegs" selected>Push/Pull/Legs</option>
+      <option value="upperlower">Upper/Lower</option>
+      <option value="5day">5-Day Split</option>
+      <option value="6day">6-Day Split</option>
+    </select>
+    <button id="setSplit">Set Split 💖</button>
+    <div id="splitDays" style="margin-top:10px;"></div>
+  </div>
+
+  <!-- Today’s Workout -->
+  <div class="card">
+    <h2>Today's Workout 🏋️‍♀️</h2>
+    <label>Select Day:</label>
+    <select id="daySelect"></select>
+    <div id="exercises"></div>
+    <button id="saveWorkout">Save Workout ✅</button>
+    <div style="margin-top:10px;"><canvas id="progressChart" width="300" height="200"></canvas></div>
+  </div>
+</div>
+
+<script>
+// -------------------- Workout Logic --------------------
+const splitSelect = document.getElementById("split");
+const setSplitBtn = document.getElementById("setSplit");
+const daySelect = document.getElementById("daySelect");
+const exercisesEl = document.getElementById("exercises");
+const saveWorkoutBtn = document.getElementById("saveWorkout");
+
+let workoutSplits = {};
+let selectedDay = "";
+let workoutData = JSON.parse(localStorage.getItem("workouts")||"{}");
+
+// Default exercises with tips and video links
+const defaultExercises = {
+  push: [
+    {name:"Bench Press", tip:"Keep your feet flat, back slightly arched.", video:"https://www.youtube.com/embed/gRVjAtPip0Y"},
+    {name:"Overhead Press", tip:"Press straight overhead, avoid arching back.", video:"https://www.youtube.com/embed/qEwKCR5JCog"},
+    {name:"Incline Dumbbell Press", tip:"Control the dumbbells, don’t lock elbows.", video:"https://www.youtube.com/embed/8iPEnn-ltC8"},
+    {name:"Tricep Pushdown", tip:"Keep elbows tucked, push down fully.", video:"https://www.youtube.com/embed/2-LAMcpzODU"}
+  ],
+  pull: [
+    {name:"Pull-ups", tip:"Full range motion, control on the way down.", video:"https://www.youtube.com/embed/eGo4IYlbE5g"},
+    {name:"Barbell Row", tip:"Keep back flat, pull to belly button.", video:"https://www.youtube.com/embed/vT2GjY_Umpw"},
+    {name:"Bicep Curl", tip:"Elbows at sides, avoid swinging.", video:"https://www.youtube.com/embed/ykJmrZ5v0Oo"},
+    {name:"Face Pull", tip:"Pull to forehead, squeeze shoulder blades.", video:"https://www.youtube.com/embed/rep-qVOkqgk"}
+  ],
+  legs: [
+    {name:"Squat", tip:"Keep chest up, knees tracking toes.", video:"https://www.youtube.com/embed/aclHkVaku9U"},
+    {name:"Deadlift", tip:"Flat back, engage core, lift with legs/hips.", video:"https://www.youtube.com/embed/ytGaGIn3SjE"},
+    {name:"Lunge", tip:"Step far enough, front knee 90°.", video:"https://www.youtube.com/embed/QOVaHwm-Q6U"},
+    {name:"Leg Press", tip:"Feet shoulder width, don’t lock knees.", video:"https://www.youtube.com/embed/IZxyjW7MPJQ"}
+  ],
+  full: [
+    {name:"Squat", tip:"Keep chest up, knees tracking toes.", video:"https://www.youtube.com/embed/aclHkVaku9U"},
+    {name:"Bench Press", tip:"Feet flat, back slightly arched.", video:"https://www.youtube.com/embed/gRVjAtPip0Y"},
+    {name:"Deadlift", tip:"Flat back, engage core, lift with legs/hips.", video:"https://www.youtube.com/embed/ytGaGIn3SjE"},
+    {name:"Pull-ups", tip:"Full range motion, control on the way down.", video:"https://www.youtube.com/embed/eGo4IYlbE5g"}
+  ]
+};
+
+function setSplit(){
+  const split = splitSelect.value;
+  workoutSplits = {};
+  if(split==="pushpulllegs"){
+    workoutSplits = {Day1:"push",Day2:"pull",Day3:"legs",Day4:"push",Day5:"pull",Day6:"legs"};
+  }else if(split==="upperlower"){
+    workoutSplits = {Day1:"upper",Day2:"lower",Day3:"upper",Day4:"lower"};
+  }else if(split==="fullbody"){
+    workoutSplits = {Day1:"full",Day2:"full",Day3:"full"};
+  }else if(split==="5day"){
+    workoutSplits = {Day1:"push",Day2:"pull",Day3:"legs",Day4:"push",Day5:"pull"};
+  }else if(split==="6day"){
+    workoutSplits = {Day1:"push",Day2:"pull",Day3:"legs",Day4:"push",Day5:"pull",Day6:"legs"};
+  }
+  renderDays();
+}
+
+function renderDays(){
+  daySelect.innerHTML="";
+  for(const day in workoutSplits){
+    const opt=document.createElement("option");
+    opt.value=day; opt.textContent=day;
+    daySelect.appendChild(opt);
+  }
+  selectedDay = daySelect.value;
+  renderExercises();
+}
+
+daySelect.onchange = ()=>{
+  selectedDay = daySelect.value;
+  renderExercises();
+};
+
+function renderExercises(){
+  exercisesEl.innerHTML="";
+  const type = workoutSplits[selectedDay];
+  const exercises = defaultExercises[type] || [];
+  exercises.forEach((ex,i)=>{
+    const div = document.createElement("div");
+    div.className="exercise";
+    div.innerHTML=`
+      <strong>${ex.name}</strong><br>
+      Sets: <input type="number" class="setInput" value="3" style="width:50px;">
+      Reps: <input type="number" class="repInput" value="10" style="width:50px;">
+      Weight (lbs): <input type="number" class="weightInput" value="" style="width:60px;"><br>
+      <button class="tipBtn secondary">Show Tip 💡</button>
+      <div class="tip">${ex.tip}</div>
+      <div class="video"><iframe width="280" height="157" src="${ex.video}" title="${ex.name}" frameborder="0" allowfullscreen></iframe></div>
+    `;
+    exercisesEl.appendChild(div);
+
+    const tipBtn = div.querySelector(".tipBtn");
+    tipBtn.onclick = ()=> {
+      const tipDiv = div.querySelector(".tip");
+      const videoDiv = div.querySelector(".video");
+      tipDiv.style.display = tipDiv.style.display==="none"?"block":"none";
+      videoDiv.style.display = videoDiv.style.display==="none"?"block":"none";
+    };
+  });
+}
+
+saveWorkoutBtn.onclick = ()=>{
+  const exEls = exercisesEl.getElementsByClassName("exercise");
+  if(!workoutData[selectedDay]) workoutData[selectedDay]=[];
+  workoutData[selectedDay]=[];
+  for(const exDiv of exEls){
+    workoutData[selectedDay].push({
+      name: exDiv.querySelector("strong").textContent,
+      sets: +exDiv.querySelector(".setInput").value,
+      reps: +exDiv.querySelector(".repInput").value,
+      weight: +exDiv.querySelector(".weightInput").value
+    });
+  }
+  localStorage.setItem("workouts",JSON.stringify(workoutData));
+  alert("Workout saved! 💪");
+  renderChart();
+}
+
+// -------------------- Progress Chart --------------------
+function renderChart(){
+  const ctx = document.getElementById("progressChart").getContext("2d");
+  const dayWeights = [];
+  const dayLabels = [];
+  for(const day in workoutData){
+    const weights = workoutData[day].map(e=>e.weight||0);
+    const avgWeight = weights.length?weights.reduce((a,b)=>a+b,0)/weights.length:0;
+    dayLabels.push(day);
+    dayWeights.push(avgWeight);
+  }
+  if(window.myChart) window.myChart.destroy();
+  window.myChart = new Chart(ctx,{
+    type:'line',
+    data:{
+      labels: dayLabels,
+      datasets:[{
+        label:"Average Weight (lbs)",
+        data: dayWeights,
+        borderColor:"#ff66b3",
+        backgroundColor:"#ffcce6",
+        fill:true,
+        tension:0.3
+      }]
+    },
+    options:{responsive:true,plugins:{legend:{display:true}}}
+  });
+}
+
+setSplitBtn.onclick=setSplit;
+setSplit();
+
+</script>
+</body>
+</html>
