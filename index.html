@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>💪 Sleek Daily Hypertrophy Tracker 💪</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body{
+  font-family: Arial, sans-serif;
+  margin:0; padding:0;
+  background: linear-gradient(135deg,#0a0f27,#1a1f3f);
+  color:#fff;
+}
+h1,h2{text-align:center;margin:10px 0;}
+.container{display:flex; flex-wrap:wrap; justify-content:center; gap:12px; padding:10px;}
+.card{
+  background:#fff; color:#0a0f27;
+  padding:20px; border-radius:16px;
+  box-shadow:0 4px 10px rgba(30,144,255,0.3);
+  flex:1 1 400px; max-width:400px;
+}
+input,select,button{padding:8px; margin:4px 0; border-radius:12px; border:1px solid #1E90FF; font-size:14px;}
+button{background:#1E90FF; color:white; border:none; cursor:pointer; transition:0.2s;}
+button:hover{background:#1C86EE;}
+button.secondary{background:#1a1f3f;color:#1E90FF;border:1px solid #1E90FF;}
+#xpBarContainer,#timerBarContainer{background:#1a1f3f; border-radius:12px; width:100%; height:20px; margin-top:6px;}
+#xpBar,#timerBar{background:#1E90FF;height:100%;width:0%;border-radius:12px;}
+#avatar{width:80px;height:80px;border-radius:50%;background:#1E90FF;margin:10px auto;}
+.badge{background:#1E90FF;color:#fff;border-radius:12px;padding:4px 8px;margin:4px 2px;display:inline-block;font-size:12px;}
+.exercise-card{background:#f0f8ff;color:#0a0f27;border-radius:12px;padding:12px;margin-bottom:10px;}
+.exercise-card input,.exercise-card select{width:70px;}
+.tip{font-size:13px;color:#0a0f27;margin:4px 0;display:none;}
+.video{margin:6px 0; display:none;}
+#confettiCanvas{position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none;}
+@media (max-width:600px){
+  .card{flex:1 1 90%; padding:12px; font-size:14px;}
+  .exercise-card input,.exercise-card select{width:50px;}
+}
+</style>
+</head>
+<body>
+<h1>💪 Daily Hypertrophy Tracker 💪</h1>
+<div id="avatar"></div>
+<canvas id="confettiCanvas"></canvas>
+
+<div class="container">
+  <div class="card">
+    <h2>Select Day 📅</h2>
+    <input type="date" id="dayPicker"/>
+    <button id="loadDay">Load Day</button>
+  </div>
+
+  <div class="card">
+    <h2>Workout 🏋️‍♀️</h2>
+    <div id="exerciseContainer"></div>
+    <button id="nextExercise">Next Exercise ➡️</button>
+    <div id="timerBarContainer"><div id="timerBar"></div></div>
+    <div id="xpDisplay">XP: 0 | Level: 1</div>
+    <div id="badges"></div>
+    <canvas id="progressChart" width="300" height="200"></canvas>
+    <div id="streakDisplay">🔥 Streak: 0 days</div>
+  </div>
+</div>
+
+<script>
+// ---------- Data ----------
+let selectedDate=new Date().toISOString().split('T')[0];
+let workoutData=JSON.parse(localStorage.getItem("workouts")||"{}");
+let xpData=JSON.parse(localStorage.getItem("xp")||"0");
+let level=Math.floor(xpData/100)+1;
+let badges=JSON.parse(localStorage.getItem("badges")||"[]");
+let streak=JSON.parse(localStorage.getItem("streak")||0);
+let lastWorkout=localStorage.getItem("lastWorkout");
+let currentExerciseIndex=0;
+let timerInterval;
+
+const defaultExercises=[
+  {name:"Squat",tip:"Chest up, knees tracking toes.",video:"https://www.youtube.com/embed/aclHkVaku9U"},
+  {name:"Bench Press",tip:"Feet flat, back slightly arched.",video:"https://www.youtube.com/embed/gRVjAtPip0Y"},
+  {name:"Deadlift",tip:"Flat back, lift with legs/hips.",video:"https://www.youtube.com/embed/ytGaGIn3SjE"},
+  {name:"Pull-ups",tip:"Full range motion.",video:"https://www.youtube.com/embed/eGo4IYlbE5g"}
+];
+
+// ---------- Functions ----------
+function renderExercise(){
+  clearInterval(timerInterval);
+  document.getElementById("timerBar").style.width="0%";
+  const container=document.getElementById("exerciseContainer");
+  container.innerHTML="";
+  if(currentExerciseIndex>=defaultExercises.length){
+    container.innerHTML="<h3>Workout Complete! 💖</h3>";
+    addXP(50); addBadge("Completed "+selectedDate); updateStreak(); renderChart(); celebrate();
+    return;
+  }
+  const ex=defaultExercises[currentExerciseIndex];
+  const div=document.createElement("div");
+  div.className="exercise-card";
+  div.innerHTML=`<strong>${ex.name}</strong><br>
+    <iframe width="100%" height="157" src="${ex.video}" frameborder="0" allowfullscreen></iframe><br>
+    Sets: <input type="number" value="3"> 
+    Reps: <input type="number" value="10"> 
+    Weight: <input type="number" value=""><br>
+    Soreness: <input type="range" min="1" max="5" value="1"><br>
+    <button class="tipBtn secondary">Show Tip 💡</button>
+    <div class="tip">${ex.tip}</div>`;
+  container.appendChild(div);
+  div.querySelector(".tipBtn").onclick=()=>{
+    const tip=div.querySelector(".tip");
+    tip.style.display=tip.style.display==="none"?"block":"none";
+  };
+  startRestTimer(60);
+}
+
+document.getElementById("nextExercise").onclick=()=>{
+  saveExercise(); currentExerciseIndex++; renderExercise();
+};
+
+function saveExercise(){
+  const container=document.getElementById("exerciseContainer");
+  const exDiv=container.querySelector(".exercise-card");
+  if(!exDiv) return;
+  if(!workoutData[selectedDate]) workoutData[selectedDate]=[];
+  workoutData[selectedDate].push({
+    name: exDiv.querySelector("strong").textContent,
+    sets:+exDiv.querySelectorAll("input[type=number]")[0].value,
+    reps:+exDiv.querySelectorAll("input[type=number]")[1].value,
+    weight:+exDiv.querySelectorAll("input[type=number]")[2].value,
+    soreness:+exDiv.querySelector("input[type=range]").value
+  });
+  localStorage.setItem("workouts",JSON.stringify(workoutData));
+}
+
+function addXP(amount){
+  xpData+=amount; localStorage.setItem("xp",xpData);
+  level=Math.floor(xpData/100)+1;
+  document.getElementById("xpDisplay").textContent=`XP: ${xpData} | Level: ${level}`;
+  document.getElementById("xpBar").style.width=((xpData%100)+"%");
+}
+
+function addBadge(name){
+  if(!badges.includes(name)) badges.push(name);
+  localStorage.setItem("badges",JSON.stringify(badges));
+  renderBadges();
+}
+function renderBadges(){
+  const bDiv=document.getElementById("badges"); bDiv.innerHTML="";
+  badges.forEach(b=>{ const span=document.createElement("span"); span.className="badge"; span.textContent=b; bDiv.appendChild(span);});
+}
+renderBadges();
+
+function renderChart(){
+  const ctx=document.getElementById("progressChart").getContext("2d");
+  const dayLabels=[]; const dayWeights=[];
+  for(const day in workoutData){
+    const w=workoutData[day].map(e=>e.weight||0);
+    const avg=w.length?w.reduce((a,b)=>a+b,0)/w.length:0;
+    dayLabels.push(day); dayWeights.push(avg);
+  }
+  if(window.myChart) window.myChart.destroy();
+  window.myChart=new Chart(ctx,{
+    type:'line',
+    data:{labels:dayLabels,datasets:[{label:"Avg Weight (lbs)",data:dayWeights,borderColor:"#1E90FF",backgroundColor:"rgba(30,144,255,0.2)",fill:true,tension:0.3}]},
+    options:{responsive:true,plugins:{legend:{display:true}}}
+  });
+}
+
+function updateAvatar(){
+  const avatar=document.getElementById("avatar");
+  avatar.style.background=`linear-gradient(135deg,#1E90FF ${level*10}%,#0a0f27)`;
+}
+updateAvatar();
+
+function updateStreak(){
+  const today=new Date().toDateString();
+  if(lastWorkout!==today){
+    const yesterday=new Date(); yesterday.setDate(yesterday.getDate()-1);
+    streak=(lastWorkout===yesterday.toDateString())?streak+1:1;
+    localStorage.setItem("streak",streak); localStorage.setItem("lastWorkout",today);
+    document.getElementById("streakDisplay").textContent=`🔥 Streak: ${streak} days`;
+  }
+}
+
+// ---------- Confetti ----------
+function celebrate(){
+  const canvas=document.getElementById("confettiCanvas");
+  const ctx=canvas.getContext("2d");
+  canvas.width=window.innerWidth; canvas.height=window.innerHeight;
+  const confetti=[]; for(let i=0;i<100;i++){ confetti.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,dx:(Math.random()-0.5)*5,dy:Math.random()*5+2,r:Math.random()*6+2})}
+  let frame=0; function draw(){ ctx.clearRect(0,0,canvas.width,canvas.height); confetti.forEach(c=>{ ctx.fillStyle="#1E90FF"; ctx.beginPath(); ctx.arc(c.x,c.y,c.r,0,Math.PI*2); ctx.fill(); c.x+=c.dx; c.y+=c.dy; if(c.y>canvas.height)c.y=0;if(c.x>canvas.width)c.x=0;if(c.x<0)c.x=canvas.width; }); frame++; if(frame<200) requestAnimationFrame(draw); } draw();
+}
+
+// ---------- Rest Timer ----------
+function startRestTimer(seconds){
+  let elapsed=0;
+  const bar=document.getElementById("timerBar");
+  timerInterval=setInterval(()=>{
+    elapsed++; let pct=(elapsed/seconds)*100; bar.style.width=pct+"%";
+    if(elapsed>=seconds){ clearInterval(timerInterval); bar.style.width="0%"; }
+  },1000);
+}
+
+// ---------- Load Day ----------
+document.getElementById("dayPicker").value=selectedDate;
+document.getElementById("loadDay").onclick=()=>{
+  selectedDate=document.getElementById("dayPicker").value;
+  currentExerciseIndex=0;
+  renderExercise();
+  renderChart();
+};
+
+renderExercise();
+renderChart();
+document.getElementById("streakDisplay").textContent=`🔥 Streak: ${streak} days`;
+</script>
+</body>
+</html>
