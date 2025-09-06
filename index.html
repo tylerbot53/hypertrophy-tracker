@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hypertrophy + Nutrition Tracker 💕</title>
+<style>
+  body { 
+    font-family: 'Arial', sans-serif; 
+    background: #ffe6f0; 
+    color: #330033; 
+    margin: 10px; 
+  }
+  h1, h2, h3 { margin: 10px 0; }
+  input, select, button { 
+    padding: 8px; 
+    margin: 4px 0; 
+    border-radius: 12px; 
+    border: 1px solid #ffb3d9; 
+    font-size: 14px; 
+  }
+  button { cursor: pointer; background: #ff66b3; color: white; border: none; transition: 0.2s; }
+  button:hover { background: #ff3399; }
+  button.secondary { background: #ffcccc; color: #330033; }
+  .container { display: flex; flex-wrap: wrap; gap: 12px; }
+  .card { 
+    background: #fff0f5; 
+    padding: 14px; 
+    border-radius: 16px; 
+    box-shadow: 0 4px 10px rgba(255, 182, 193, 0.4); 
+    flex: 1 1 300px; 
+  }
+  .exercise { padding: 6px; border: 1px dashed #ffb3d9; margin-bottom: 6px; border-radius: 8px; }
+  small { color: #660066; }
+</style>
+</head>
+<body>
+
+<h1>💖 Hypertrophy + Nutrition Tracker 💖</h1>
+
+<div class="container">
+  <!-- Workout Info -->
+  <div class="card">
+    <h2>Your Info</h2>
+    <label>Weight (lbs):</label>
+    <input id="weight" type="number" value="150">
+    <label>Height (inches):</label>
+    <input id="height" type="number" value="65">
+    <label>Age:</label>
+    <input id="age" type="number" value="25">
+    <label>Sex:</label>
+    <select id="sex">
+      <option value="female">Female</option>
+      <option value="male" selected>Male</option>
+    </select>
+    <label>Activity level:</label>
+    <select id="activity">
+      <option value="1.2">Sedentary</option>
+      <option value="1.375">Light (1-2x/wk)</option>
+      <option value="1.55" selected>Moderate (3-5x/wk)</option>
+      <option value="1.725">Very active</option>
+    </select>
+    <label>Training days per week:</label>
+    <select id="days">
+      <option>3</option>
+      <option>4</option>
+      <option selected>5</option>
+      <option>6</option>
+    </select>
+    <button id="generate">Generate Program 💪</button>
+    <div id="programOutput" style="margin-top:10px;"></div>
+  </div>
+
+  <!-- Nutrition Tracker -->
+  <div class="card">
+    <h2>Nutrition Tracker 🍓</h2>
+    <label>Calorie Goal:</label>
+    <input id="calGoal" type="number" value="2000">
+    <label>Protein Goal (g):</label>
+    <input id="proteinGoal" type="number" value="150">
+
+    <h3>Add Food</h3>
+    <label>Name:</label>
+    <input id="foodName" type="text" placeholder="Chicken breast">
+    <div>
+      <input id="foodCal" type="number" placeholder="Calories">
+      <input id="foodPro" type="number" placeholder="Protein">
+      <input id="foodCarb" type="number" placeholder="Carbs">
+      <input id="foodFat" type="number" placeholder="Fat">
+    </div>
+    <button id="addFood">Add Food 🍑</button>
+
+    <h3>Today's Log</h3>
+    <div id="foodLog"></div>
+    <div id="totals" style="margin-top:10px;font-weight:bold;"></div>
+  </div>
+</div>
+
+<script>
+// -------------------- Hypertrophy --------------------
+const weight = document.getElementById("weight");
+const height = document.getElementById("height");
+const age = document.getElementById("age");
+const sexEl = document.getElementById("sex");
+const activity = document.getElementById("activity");
+const daysEl = document.getElementById("days");
+const sq_w = 0, sq_r = 0;
+const programOutput = document.getElementById("programOutput");
+
+function toKg(lbs){return lbs/2.205;}
+function toCm(inch){return inch*2.54;}
+function calcTDEE(w,h,a,sex,act){
+  const kg=toKg(w), cm=toCm(h);
+  let bmr= sex==="male"?10*kg+6.25*cm-5*a+5:10*kg+6.25*cm-5*a-161;
+  return Math.round(bmr*act);
+}
+function generateProgram(){
+  const w=+weight.value,h=+height.value,a=+age.value,sex=sexEl.value,act=+activity.value,days=+daysEl.value;
+  const tdee=calcTDEE(w,h,a,sex,act);
+  let html=`<p>TDEE: ${tdee} kcal/day</p>`;
+  html+="<ul>";
+  for(let d=1;d<=days;d++){
+    html+=`<li class="exercise"><strong>Day ${d}:</strong> Squat, Bench, Deadlift, Accessories</li>`;
+  }
+  html+="</ul>";
+  programOutput.innerHTML=html;
+}
+document.getElementById("generate").onclick=generateProgram;
+
+// -------------------- Nutrition --------------------
+const foodName=document.getElementById("foodName");
+const foodCal=document.getElementById("foodCal");
+const foodPro=document.getElementById("foodPro");
+const foodCarb=document.getElementById("foodCarb");
+const foodFat=document.getElementById("foodFat");
+const foodLog=document.getElementById("foodLog");
+const totals=document.getElementById("totals");
+const calGoal=document.getElementById("calGoal");
+const proteinGoal=document.getElementById("proteinGoal");
+
+function loadFoods(){return JSON.parse(localStorage.getItem("foods")||"[]");}
+function saveFoods(arr){localStorage.setItem("foods",JSON.stringify(arr));}
+function renderFoods(){
+  const arr=loadFoods();
+  foodLog.innerHTML="";
+  let cals=0,pro=0,car=0,fat=0;
+  arr.forEach((f,i)=>{
+    cals+=+f.cal;pro+=+f.pro;car+=+f.carb;fat+=+f.fat;
+    foodLog.innerHTML+=`<div>${f.name} — ${f.cal} kcal, P:${f.pro} C:${f.carb} F:${f.fat} <button onclick="delFood(${i})" class="secondary">x</button></div>`;
+  });
+  totals.innerText=`Total: ${cals}/${calGoal.value} kcal, Protein: ${pro}/${proteinGoal.value} g`;
+}
+function addFood(){
+  const f={name:foodName.value,cal:+foodCal.value,pro:+foodPro.value,car:+foodCarb.value,fat:+foodFat.value};
+  if(!f.name||!f.cal) return;
+  const arr=loadFoods();arr.push(f);saveFoods(arr);renderFoods();
+  foodName.value=foodCal.value=foodPro.value=foodCarb.value=foodFat.value="";
+}
+function delFood(i){
+  const arr=loadFoods();arr.splice(i,1);saveFoods(arr);renderFoods();
+}
+document.getElementById("addFood").onclick=addFood;
+renderFoods();
+</script>
+
+</body>
+</html>

@@ -1,1 +1,0 @@
-# hypertrophy-tracker
