@@ -3,72 +3,66 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Hypertrophy + Nutrition Tracker 💕</title>
+<title>💕 My Hypertrophy Tracker 💕</title>
+
+<!-- Chart.js CDN for progress graphs -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 <style>
-  body { 
-    font-family: 'Arial', sans-serif; 
-    background: #ffe6f0; 
-    color: #330033; 
-    margin: 10px; 
+  body {
+    font-family: 'Arial', sans-serif;
+    background: #ffe6f0;
+    color: #330033;
+    margin: 10px;
   }
-  h1, h2, h3 { margin: 10px 0; }
+  h1,h2,h3 { margin: 10px 0; }
+  .container { display: flex; flex-wrap: wrap; gap: 12px; }
+  .card {
+    background: #fff0f5;
+    padding: 16px;
+    border-radius: 16px;
+    box-shadow: 0 4px 10px rgba(255, 182, 193, 0.4);
+    flex: 1 1 300px;
+  }
   input, select, button { 
-    padding: 8px; 
-    margin: 4px 0; 
-    border-radius: 12px; 
-    border: 1px solid #ffb3d9; 
-    font-size: 14px; 
+    padding: 8px; margin: 4px 0; border-radius: 12px; border: 1px solid #ffb3d9; font-size: 14px; 
   }
-  button { cursor: pointer; background: #ff66b3; color: white; border: none; transition: 0.2s; }
+  button { cursor: pointer; background: #ff66b3; color: white; border: none; transition:0.2s; }
   button:hover { background: #ff3399; }
   button.secondary { background: #ffcccc; color: #330033; }
-  .container { display: flex; flex-wrap: wrap; gap: 12px; }
-  .card { 
-    background: #fff0f5; 
-    padding: 14px; 
-    border-radius: 16px; 
-    box-shadow: 0 4px 10px rgba(255, 182, 193, 0.4); 
-    flex: 1 1 300px; 
-  }
   .exercise { padding: 6px; border: 1px dashed #ffb3d9; margin-bottom: 6px; border-radius: 8px; }
   small { color: #660066; }
+  .completed { text-decoration: line-through; color: #999; }
 </style>
 </head>
 <body>
 
-<h1>💖 Hypertrophy + Nutrition Tracker 💖</h1>
+<h1>💕 My Hypertrophy + Nutrition Tracker 💕</h1>
 
 <div class="container">
-  <!-- Workout Info -->
+  <!-- Workout Split Selection -->
   <div class="card">
-    <h2>Your Info</h2>
-    <label>Weight (lbs):</label>
-    <input id="weight" type="number" value="150">
-    <label>Height (inches):</label>
-    <input id="height" type="number" value="65">
-    <label>Age:</label>
-    <input id="age" type="number" value="25">
-    <label>Sex:</label>
-    <select id="sex">
-      <option value="female">Female</option>
-      <option value="male" selected>Male</option>
+    <h2>Workout Split 🏋️‍♀️</h2>
+    <label>Select Split:</label>
+    <select id="split">
+      <option value="fullbody">Full Body</option>
+      <option value="pushpulllegs" selected>Push/Pull/Legs</option>
+      <option value="upperlower">Upper/Lower</option>
+      <option value="5day">5-Day Split</option>
+      <option value="6day">6-Day Split</option>
     </select>
-    <label>Activity level:</label>
-    <select id="activity">
-      <option value="1.2">Sedentary</option>
-      <option value="1.375">Light (1-2x/wk)</option>
-      <option value="1.55" selected>Moderate (3-5x/wk)</option>
-      <option value="1.725">Very active</option>
-    </select>
-    <label>Training days per week:</label>
-    <select id="days">
-      <option>3</option>
-      <option>4</option>
-      <option selected>5</option>
-      <option>6</option>
-    </select>
-    <button id="generate">Generate Program 💪</button>
-    <div id="programOutput" style="margin-top:10px;"></div>
+    <button id="setSplit">Set Split 💖</button>
+    <div id="splitDays" style="margin-top:10px;"></div>
+  </div>
+
+  <!-- Today’s Workout -->
+  <div class="card">
+    <h2>Today's Workout 🏋️‍♀️</h2>
+    <label>Select Day:</label>
+    <select id="daySelect"></select>
+    <div id="exercises"></div>
+    <button id="saveWorkout">Save Workout ✅</button>
+    <div style="margin-top:10px;"><canvas id="progressChart" width="300" height="200"></canvas></div>
   </div>
 
   <!-- Nutrition Tracker -->
@@ -97,37 +91,126 @@
 </div>
 
 <script>
-// -------------------- Hypertrophy --------------------
-const weight = document.getElementById("weight");
-const height = document.getElementById("height");
-const age = document.getElementById("age");
-const sexEl = document.getElementById("sex");
-const activity = document.getElementById("activity");
-const daysEl = document.getElementById("days");
-const sq_w = 0, sq_r = 0;
-const programOutput = document.getElementById("programOutput");
+// -------------------- Workout Logic --------------------
+const splitSelect = document.getElementById("split");
+const setSplitBtn = document.getElementById("setSplit");
+const splitDaysEl = document.getElementById("splitDays");
+const daySelect = document.getElementById("daySelect");
+const exercisesEl = document.getElementById("exercises");
+const saveWorkoutBtn = document.getElementById("saveWorkout");
 
-function toKg(lbs){return lbs/2.205;}
-function toCm(inch){return inch*2.54;}
-function calcTDEE(w,h,a,sex,act){
-  const kg=toKg(w), cm=toCm(h);
-  let bmr= sex==="male"?10*kg+6.25*cm-5*a+5:10*kg+6.25*cm-5*a-161;
-  return Math.round(bmr*act);
-}
-function generateProgram(){
-  const w=+weight.value,h=+height.value,a=+age.value,sex=sexEl.value,act=+activity.value,days=+daysEl.value;
-  const tdee=calcTDEE(w,h,a,sex,act);
-  let html=`<p>TDEE: ${tdee} kcal/day</p>`;
-  html+="<ul>";
-  for(let d=1;d<=days;d++){
-    html+=`<li class="exercise"><strong>Day ${d}:</strong> Squat, Bench, Deadlift, Accessories</li>`;
+let workoutSplits = {};
+let selectedDay = "";
+let workoutData = JSON.parse(localStorage.getItem("workouts")||"{}");
+
+// Default exercises
+const defaultExercises = {
+  push: ["Bench Press","Overhead Press","Incline Dumbbell Press","Tricep Pushdown"],
+  pull: ["Pull-ups","Barbell Row","Bicep Curl","Face Pull"],
+  legs: ["Squat","Deadlift","Lunge","Leg Press"],
+  full: ["Squat","Bench Press","Deadlift","Pull-ups"]
+};
+
+function setSplit(){
+  const split = splitSelect.value;
+  workoutSplits = {};
+  if(split==="pushpulllegs"){
+    workoutSplits = {Day1:"push",Day2:"pull",Day3:"legs",Day4:"push",Day5:"pull",Day6:"legs"};
+  }else if(split==="upperlower"){
+    workoutSplits = {Day1:"upper",Day2:"lower",Day3:"upper",Day4:"lower"};
+  }else if(split==="fullbody"){
+    workoutSplits = {Day1:"full",Day2:"full",Day3:"full"};
+  }else if(split==="5day"){
+    workoutSplits = {Day1:"push",Day2:"pull",Day3:"legs",Day4:"push",Day5:"pull"};
+  }else if(split==="6day"){
+    workoutSplits = {Day1:"push",Day2:"pull",Day3:"legs",Day4:"push",Day5:"pull",Day6:"legs"};
   }
-  html+="</ul>";
-  programOutput.innerHTML=html;
+  renderDays();
 }
-document.getElementById("generate").onclick=generateProgram;
 
-// -------------------- Nutrition --------------------
+function renderDays(){
+  daySelect.innerHTML="";
+  for(const day in workoutSplits){
+    const opt=document.createElement("option");
+    opt.value=day; opt.textContent=day;
+    daySelect.appendChild(opt);
+  }
+  selectedDay = daySelect.value;
+  renderExercises();
+}
+
+daySelect.onchange = ()=>{
+  selectedDay = daySelect.value;
+  renderExercises();
+};
+
+function renderExercises(){
+  exercisesEl.innerHTML="";
+  const type = workoutSplits[selectedDay];
+  const exercises = defaultExercises[type] || [];
+  exercises.forEach((ex,i)=>{
+    const div = document.createElement("div");
+    div.className="exercise";
+    div.innerHTML=`
+      <strong>${ex}</strong><br>
+      Sets: <input type="number" class="setInput" value="3" style="width:50px;">
+      Reps: <input type="number" class="repInput" value="10" style="width:50px;">
+      Weight (lbs): <input type="number" class="weightInput" value="" style="width:60px;">
+    `;
+    exercisesEl.appendChild(div);
+  });
+}
+
+saveWorkoutBtn.onclick = ()=>{
+  const exEls = exercisesEl.getElementsByClassName("exercise");
+  if(!workoutData[selectedDay]) workoutData[selectedDay]=[];
+  workoutData[selectedDay]=[];
+  for(const exDiv of exEls){
+    workoutData[selectedDay].push({
+      name: exDiv.querySelector("strong").textContent,
+      sets: +exDiv.querySelector(".setInput").value,
+      reps: +exDiv.querySelector(".repInput").value,
+      weight: +exDiv.querySelector(".weightInput").value
+    });
+  }
+  localStorage.setItem("workouts",JSON.stringify(workoutData));
+  alert("Workout saved! 💪");
+  renderChart();
+}
+
+// -------------------- Progress Chart --------------------
+function renderChart(){
+  const ctx = document.getElementById("progressChart").getContext("2d");
+  const dayWeights = [];
+  const dayLabels = [];
+  for(const day in workoutData){
+    const weights = workoutData[day].map(e=>e.weight||0);
+    const avgWeight = weights.length?weights.reduce((a,b)=>a+b,0)/weights.length:0;
+    dayLabels.push(day);
+    dayWeights.push(avgWeight);
+  }
+  if(window.myChart) window.myChart.destroy();
+  window.myChart = new Chart(ctx,{
+    type:'line',
+    data:{
+      labels: dayLabels,
+      datasets:[{
+        label:"Average Weight (lbs)",
+        data: dayWeights,
+        borderColor:"#ff66b3",
+        backgroundColor:"#ffcce6",
+        fill:true,
+        tension:0.3
+      }]
+    },
+    options:{responsive:true,plugins:{legend:{display:true}}}
+  });
+}
+
+setSplitBtn.onclick=setSplit;
+setSplit();
+
+// -------------------- Nutrition Tracker --------------------
 const foodName=document.getElementById("foodName");
 const foodCal=document.getElementById("foodCal");
 const foodPro=document.getElementById("foodPro");
@@ -161,7 +244,7 @@ function delFood(i){
 }
 document.getElementById("addFood").onclick=addFood;
 renderFoods();
-</script>
 
+</script>
 </body>
 </html>
